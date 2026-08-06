@@ -1,0 +1,31 @@
+databaseChangeLog:
+  - changeSet:
+      id: 0f8c1147-b8db-40e3-ab92-0bd7fe037731
+      author: JuanCarlos
+      labels: "BD-01-dev,ddl,base,extensions"
+      comment: Enables the uuid-ossp extension for the database baseline.
+      changes:
+        - sqlFile:
+            path: 001_enable_uuid_extension.sql
+            relativeToChangelogFile: true
+            stripComments: false
+      rollback:
+        - sqlFile:
+            path: ../../05_rollbacks/01_ddl/00_extensions/001_disable_uuid_extension.sql
+            relativeToChangelogFile: true
+            stripComments: false
+  - changeSet:
+      id: 7f3a29bd-96e1-4d92-974b-82b6f0c6bb45
+      author: juanCarlos
+      labels: "HU-03-dev,ddl,extensions"
+      comment: Enables btree_gist for class session exclusion constraints.
+      changes:
+        - sqlFile:
+            path: 002_enable_btree_gist_extension.sql
+            relativeToChangelogFile: true
+            stripComments: false
+      rollback:
+        - sqlFile:
+            path: ../../05_rollbacks/01_ddl/00_extensions/002_disable_btree_gist_extension.sql
+            relativeToChangelogFile: true
+            stripComments: false

@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: seed-demo-scheduling-001
+      author: jesus-gonzalez
+      labels: "seed,demo"
+      comment: Demo - franja horaria y horario DRAFT
+      changes:
+        - sqlFile: {path: 001_seed_demo.sql, relativeToChangelogFile: true, splitStatements: true, stripComments: false}
+      rollback:
+        - sql: {sql: "DELETE FROM scheduling.schedule WHERE id='e0000000-0000-0000-0000-000000000002'; DELETE FROM scheduling.time_slot WHERE id='e0000000-0000-0000-0000-000000000001';"}

@@ -1,0 +1,17 @@
+databaseChangeLog:
+  - changeSet:
+      id: 5b29d102-0f36-43fa-bc0d-a17cf94dd0a6
+      author: juanCarlos
+      labels: "HU-03-dev,ddl,triggers"
+      comment: Prevents changes to published schedules except archiving.
+      changes:
+        - sqlFile:
+            path: 0001_enforce_schedule_published_immutability.sql
+            relativeToChangelogFile: true
+            stripComments: false
+            splitStatements: false
+      rollback:
+        - sqlFile:
+            path: ../../05_rollbacks/01_ddl/09_triggers/0001_drop_schedule_published_immutability.sql
+            relativeToChangelogFile: true
+            stripComments: false
