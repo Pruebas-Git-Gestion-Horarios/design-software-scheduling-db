@@ -1,0 +1,31 @@
+databaseChangeLog:
+  - changeSet:
+      id: 78940aee-df1e-42e2-961b-ae94d1f684dd
+      author: juan
+      labels: "HU-02-dev,ddl,base,indexes"
+      comment: Creates indexes for the schedule table.
+      changes:
+        - sqlFile:
+            path: 001_create_schedule_indexes.sql
+            relativeToChangelogFile: true
+            stripComments: false
+      rollback:
+        - sqlFile:
+            path: ../../05_rollbacks/01_ddl/10_indexes/001_drop_schedule_indexes.sql
+            relativeToChangelogFile: true
+            stripComments: false
+  - changeSet:
+      id: 7e93056d-fd66-4b29-9f8b-6b03db0e3a9b
+      author: juanCarlos
+      labels: "HU-03-dev,ddl,indexes"
+      comment: Creates lookup indexes and overlap protections for class sessions.
+      changes:
+        - sqlFile:
+            path: 002_create_class_session_indexes.sql
+            relativeToChangelogFile: true
+            stripComments: false
+      rollback:
+        - sqlFile:
+            path: ../../05_rollbacks/01_ddl/10_indexes/002_drop_class_session_indexes.sql
+            relativeToChangelogFile: true
+            stripComments: false

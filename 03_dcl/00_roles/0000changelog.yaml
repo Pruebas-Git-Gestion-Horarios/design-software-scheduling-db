@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: dcl-roles-scheduling-001
+      author: jesus-gonzalez
+      labels: "dcl,roles"
+      comment: Roles reader/writer/admin del dominio scheduling
+      changes:
+        - sqlFile: {path: 001_create_roles.sql, relativeToChangelogFile: true, splitStatements: false, stripComments: false}
+      rollback:
+        - sql: {sql: "DROP ROLE IF EXISTS scheduling_reader; DROP ROLE IF EXISTS scheduling_writer; DROP ROLE IF EXISTS scheduling_admin;"}

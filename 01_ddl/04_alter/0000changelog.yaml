@@ -1,0 +1,34 @@
+databaseChangeLog:
+  - changeSet:
+      id: f2146a65-63d0-47b8-a495-7eef27d63272
+      author: juanCarlos
+      labels: "HU-02-dev,ddl,base,alter"
+      comment: Correct the column name from 'nigth' to 'night' in 'time_slot'.
+      changes:
+        - sqlFile:
+            path: 0001_rename_nigth_to_night.sql
+            relativeToChangelogFile: true
+            stripComments: false
+      rollback:
+        - sqlFile:
+            path: ../../05_rollbacks/01_ddl/04_alter/0001_drop_nigth_to_night.sql
+            relativeToChangelogFile: true
+            stripComments: false
+  - changeSet:
+      id: quality-fixes-scheduling-950
+      author: jesus-gonzalez
+      labels: "quality,v2"
+      comment: id DEFAULT gen_random_uuid e indices de FK faltantes
+      changes:
+        - sqlFile: {path: 950_quality_fixes.sql, relativeToChangelogFile: true, splitStatements: true, stripComments: false}
+      rollback:
+        - sql: {sql: "SELECT 1;"}
+  - changeSet:
+      id: remediation-scheduling-960
+      author: jesus-gonzalez
+      labels: "remediation,congruence,v2"
+      comment: "R3: columnas de soft-delete en schedule/class_session/time_slot (congruencia contrato<->BD)"
+      changes:
+        - sqlFile: {path: 960_remediation.sql, relativeToChangelogFile: true, splitStatements: true, stripComments: false}
+      rollback:
+        - sqlFile: {path: ../../05_rollbacks/01_ddl/04_alter/960_remediation.rollback.sql, relativeToChangelogFile: true, stripComments: false}
