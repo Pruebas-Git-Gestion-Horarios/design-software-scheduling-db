@@ -1,0 +1,16 @@
+databaseChangeLog:
+  - changeSet:
+      id: 9c1e2a34-7f5b-4d18-a6c2-3e0b71d4c8af
+      author: juanCarlos
+      labels: "HU-01-dev,ddl,base,schemas"
+      comment: Creates the scheduling schema for the scheduling module.
+      changes:
+        - sqlFile:
+            path: 001_create_schema_scheduling.sql
+            relativeToChangelogFile: true
+            stripComments: false
+      rollback:
+        - sqlFile:
+            path: ../../05_rollbacks/01_ddl/01_schemas/001_drop_schema_scheduling.sql
+            relativeToChangelogFile: true
+            stripComments: false
