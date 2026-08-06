@@ -1,0 +1,61 @@
+databaseChangeLog:
+  - changeSet:
+      id: 4bbcda2f-37d6-4591-801f-1a3e9aabce96
+      author: juan
+      labels: "HU-01-dev,ddl,base,tables"
+      comment: Creates the schedule table for the scheduling module.
+      changes:
+        - sqlFile:
+            path: 0001_create_schedule.sql
+            relativeToChangelogFile: true
+            stripComments: false
+      rollback:
+        - sqlFile:
+            path: ../../05_rollbacks/01_ddl/03_tables/001_drop_schedule.sql
+            relativeToChangelogFile: true
+            stripComments: false   
+  - changeSet:
+      id: bf927b8c-5f0a-4a4d-b9ed-8fc76b1d5551
+      author: juanCarlos
+      labels: "HU-02-dev,ddl,base,tables"
+      comment: Creates the time_slot table for the scheduling module.
+      changes:
+        - sqlFile:
+            path: 0002_create_time_slot.sql
+            relativeToChangelogFile: true
+            stripComments: false
+      rollback:
+        - sqlFile:
+            path: ../../05_rollbacks/01_ddl/03_tables/0002_drop_time_slot.sql
+            relativeToChangelogFile: true
+            stripComments: false
+  - changeSet:
+      id: 053b99d1-e5e1-4d66-8b9a-264d603119a6
+      author: juanCarlos
+      labels: "HU-03-dev,ddl,tables"
+      comment: Creates the class session table for the scheduling module.
+      changes:
+        - sqlFile:
+            path: 0003_create_class_session.sql
+            relativeToChangelogFile: true
+            stripComments: false
+      rollback:
+        - sqlFile:
+            path: ../../05_rollbacks/01_ddl/03_tables/0003_drop_class_session.sql
+            relativeToChangelogFile: true
+            stripComments: false
+  - changeSet:
+      id: 4f179b1a-6e0b-4af8-a624-cc7c50d03c95
+      author: juanCarlos
+      labels: "HU-03-dev,ddl,tables"
+      comment: Creates the scheduling conflict table for the scheduling module.
+      changes:
+        - sqlFile:
+            path: 0004_create_scheduling_conflict.sql
+            relativeToChangelogFile: true
+            stripComments: false
+      rollback:
+        - sqlFile:
+            path: ../../05_rollbacks/01_ddl/03_tables/0004_drop_scheduling_conflict.sql
+            relativeToChangelogFile: true
+            stripComments: false
