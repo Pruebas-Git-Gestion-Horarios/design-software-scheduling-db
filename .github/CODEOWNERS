@@ -1,0 +1,39 @@
+# ==========================================================
+# PROPIEDAD GENERAL
+# Todo cambio requiere revisión del equipo administrativo.
+# ==========================================================
+
+* @Pruebas-Git-Gestion-Horarios/Software Develop docs (Admin)
+
+
+# ==========================================================
+# GOBIERNO Y SEGURIDAD DEL REPOSITORIO
+# ==========================================================
+
+/.github/ @Pruebas-Git-Gestion-Horarios/Software Develop docs (Admin)
+/.github/CODEOWNERS @Pruebas-Git-Gestion-Horarios/Software Develop docs (Admin)
+/.github/workflows/ @Pruebas-Git-Gestion-Horarios/Software Develop docs (Admin)
+/.github/pull_request_template.md @Pruebas-Git-Gestion-Horarios/Software Develop docs (Admin)
+/.github/dependabot.yml @Pruebas-Git-Gestion-Horarios/Software Develop docs (Admin)
+
+/SECURITY.md @Pruebas-Git-Gestion-Horarios/Software Develop docs (Admin)
+/.gitignore @Pruebas-Git-Gestion-Horarios/Software Develop docs (Admin)
+
+
+# ==========================================================
+# MIGRACIONES DE BASE DE DATOS
+# ==========================================================
+
+/01_ddl/ @Pruebas-Git-Gestion-Horarios/Software Develop docs (Admin)
+/02_dml/ @Pruebas-Git-Gestion-Horarios/Software Develop docs (Admin)
+/03_dcl/ @Pruebas-Git-Gestion-Horarios/Software Develop docs (Admin)
+/04_tcl/ @Pruebas-Git-Gestion-Horarios/Software Develop docs (Admin)
+/05_rollbacks/ @Pruebas-Git-Gestion-Horarios/Software Develop docs (Admin)
+
+
+# ==========================================================
+# LIQUIBASE
+# ==========================================================
+
+/changelog/ @Pruebas-Git-Gestion-Horarios/Software Develop docs (Admin)
+/changelog/changelog-master.yaml @Pruebas-Git-Gestion-Horarios/Software Develop docs (Admin)
