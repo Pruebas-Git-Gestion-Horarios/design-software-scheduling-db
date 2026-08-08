@@ -1,0 +1,392 @@
+name: Database Security Pipeline
+
+on:
+  pull_request:
+    branches:
+      - develop
+      - qa
+      - staging
+      - main
+
+  push:
+    branches:
+      - develop
+      - qa
+      - staging
+      - main
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: database-${{ github.repository }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-promotion-flow:
+    name: validate-promotion-flow
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Validar flujo entre ramas
+        shell: bash
+        env:
+          SOURCE_BRANCH: ${{ github.head_ref }}
+          TARGET_BRANCH: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+
+          echo "Origen: $SOURCE_BRANCH"
+          echo "Destino: $TARGET_BRANCH"
+
+          case "$TARGET_BRANCH" in
+            develop)
+              if [[ ! "$SOURCE_BRANCH" =~ ^(feature|fix|security|chore)/.+$ ]]; then
+                echo "::error::develop solo recibe feature/*, fix/*, security/* o chore/*."
+                exit 1
+              fi
+              ;;
+
+            qa)
+              if [ "$SOURCE_BRANCH" != "develop" ]; then
+                echo "::error::qa solamente recibe Pull Requests desde develop."
+                exit 1
+              fi
+              ;;
+
+            staging)
+              if [ "$SOURCE_BRANCH" != "qa" ]; then
+                echo "::error::staging solamente recibe Pull Requests desde qa."
+                exit 1
+              fi
+              ;;
+
+            main)
+              if [ "$SOURCE_BRANCH" != "staging" ] &&
+                 [[ ! "$SOURCE_BRANCH" =~ ^hotfix/.+$ ]]; then
+                echo "::error::main solo recibe cambios desde staging o hotfix/*."
+                exit 1
+              fi
+              ;;
+
+            *)
+              echo "::error::Rama destino no autorizada."
+              exit 1
+              ;;
+          esac
+
+  repository-policy:
+    name: repository-policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Obtener repositorio
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validar estructura mínima
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          required_paths=(
+            "01_ddl"
+            "02_dml"
+            "03_dcl"
+            "04_tcl"
+            "05_rollbacks"
+            "changelog/changelog-master.yaml"
+          )
+
+          for path in "${required_paths[@]}"; do
+            if [ ! -e "$path" ]; then
+              echo "::error::No existe la ruta obligatoria: $path"
+              exit 1
+            fi
+          done
+
+      - name: Detectar archivos sensibles
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          sensitive_files=$(find . -type f \
+            \( -name ".env" \
+            -o -name ".env.*" \
+            -o -name "*.pem" \
+            -o -name "*.key" \
+            -o -name "*.p12" \
+            -o -name "*.pfx" \
+            -o -name "id_rsa" \
+            -o -name "id_ed25519" \
+            -o -name "*.dump" \
+            -o -name "*.backup" \) \
+            ! -name ".env.example" \
+            ! -path "./.git/*")
+
+          if [ -n "$sensitive_files" ]; then
+            echo "::error::Se encontraron archivos sensibles:"
+            echo "$sensitive_files"
+            exit 1
+          fi
+
+      - name: Detectar conflictos Git
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if grep -RIn \
+            --exclude-dir=.git \
+            -E '^(<<<<<<<|>>>>>>>)[[:space:]]' .; then
+            echo "::error::Existen conflictos Git sin resolver."
+            exit 1
+          fi
+
+      - name: Detectar permisos inseguros
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if grep -RIn \
+            --include="*.sql" \
+            -E 'GRANT[[:space:]]+ALL([[:space:]]+PRIVILEGES)?[[:space:]]+.*[[:space:]]+TO[[:space:]]+PUBLIC' \
+            .; then
+            echo "::error::No se permite GRANT ALL a PUBLIC."
+            exit 1
+          fi
+
+      - name: Detectar credenciales escritas en SQL o YAML
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if grep -RIn \
+            --include="*.sql" \
+            --include="*.yaml" \
+            --include="*.yml" \
+            -E '(password|passwd|secret|token)[[:space:]]*[:=][[:space:]]*["'\''][^"'\'']+["'\'']' \
+            .; then
+            echo "::error::Posible credencial almacenada en el repositorio."
+            exit 1
+          fi
+
+      - name: Validar presencia de rollback
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git fetch origin "${{ github.base_ref }}" --depth=1
+
+          changed_files=$(git diff \
+            --name-only \
+            "origin/${{ github.base_ref }}...HEAD")
+
+          echo "Archivos modificados:"
+          echo "$changed_files"
+
+          migration_changed=false
+          rollback_changed=false
+
+          if echo "$changed_files" |
+            grep -Eq '^(01_ddl|02_dml|03_dcl)/'; then
+            migration_changed=true
+          fi
+
+          if echo "$changed_files" |
+            grep -Eq '^05_rollbacks/'; then
+            rollback_changed=true
+          fi
+
+          if [ "$migration_changed" = true ] &&
+             [ "$rollback_changed" = false ]; then
+            echo "::error::Se modificaron migraciones sin actualizar 05_rollbacks/."
+            exit 1
+          fi
+
+  liquibase-validation:
+    name: liquibase-validation
+    runs-on: ubuntu-latest
+    needs:
+      - repository-policy
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: security_pipeline
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres_test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d security_pipeline"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      LIQUIBASE_IMAGE: liquibase/liquibase:4.31.1
+      DB_URL: jdbc:postgresql://localhost:5432/security_pipeline
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres_test_password
+      CHANGELOG_FILE: changelog/changelog-master.yaml
+
+    steps:
+      - name: Obtener repositorio
+        uses: actions/checkout@v4
+
+      - name: Instalar cliente PostgreSQL
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Descargar Liquibase
+        run: docker pull "$LIQUIBASE_IMAGE"
+
+      - name: Validar changelog
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          docker run --rm \
+            --network host \
+            -v "$PWD:/liquibase/changelog" \
+            "$LIQUIBASE_IMAGE" \
+            --url="$DB_URL" \
+            --username="$DB_USERNAME" \
+            --password="$DB_PASSWORD" \
+            --changelog-file="$CHANGELOG_FILE" \
+            validate
+
+      - name: Generar SQL previo
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          docker run --rm \
+            --network host \
+            -v "$PWD:/liquibase/changelog" \
+            "$LIQUIBASE_IMAGE" \
+            --url="$DB_URL" \
+            --username="$DB_USERNAME" \
+            --password="$DB_PASSWORD" \
+            --changelog-file="$CHANGELOG_FILE" \
+            update-sql \
+            > database-update.sql
+
+          test -s database-update.sql
+
+      - name: Aplicar migraciones
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          docker run --rm \
+            --network host \
+            -v "$PWD:/liquibase/changelog" \
+            "$LIQUIBASE_IMAGE" \
+            --url="$DB_URL" \
+            --username="$DB_USERNAME" \
+            --password="$DB_PASSWORD" \
+            --changelog-file="$CHANGELOG_FILE" \
+            update
+
+      - name: Comprobar cambios pendientes
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          docker run --rm \
+            --network host \
+            -v "$PWD:/liquibase/changelog" \
+            "$LIQUIBASE_IMAGE" \
+            --url="$DB_URL" \
+            --username="$DB_USERNAME" \
+            --password="$DB_PASSWORD" \
+            --changelog-file="$CHANGELOG_FILE" \
+            status --verbose \
+            | tee liquibase-status.txt
+
+          if grep -Eqi \
+            '[1-9][0-9]* changeset(s)? have not been applied' \
+            liquibase-status.txt; then
+            echo "::error::Quedaron changesets pendientes."
+            exit 1
+          fi
+
+      - name: Probar rollback del último changeset
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          docker run --rm \
+            --network host \
+            -v "$PWD:/liquibase/changelog" \
+            "$LIQUIBASE_IMAGE" \
+            --url="$DB_URL" \
+            --username="$DB_USERNAME" \
+            --password="$DB_PASSWORD" \
+            --changelog-file="$CHANGELOG_FILE" \
+            rollback-count 1
+
+      - name: Reaplicar después del rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          docker run --rm \
+            --network host \
+            -v "$PWD:/liquibase/changelog" \
+            "$LIQUIBASE_IMAGE" \
+            --url="$DB_URL" \
+            --username="$DB_USERNAME" \
+            --password="$DB_PASSWORD" \
+            --changelog-file="$CHANGELOG_FILE" \
+            update
+
+      - name: Comprobar schemas creados
+        env:
+          PGPASSWORD: postgres_test_password
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          psql \
+            -h localhost \
+            -U postgres \
+            -d security_pipeline \
+            -c "\dn"
+
+          schema_count=$(psql \
+            -h localhost \
+            -U postgres \
+            -d security_pipeline \
+            -tAc "
+              SELECT COUNT(*)
+              FROM information_schema.schemata
+              WHERE schema_name NOT IN
+                ('pg_catalog', 'information_schema', 'public')
+              AND schema_name NOT LIKE 'pg_toast%';
+            ")
+
+          if [ "$schema_count" -lt 1 ]; then
+            echo "::error::No se creó ningún schema funcional."
+            exit 1
+          fi
+
+      - name: Publicar SQL generado
+        uses: actions/upload-artifact@v4
+        with:
+          name: database-update-sql
+          path: database-update.sql
+          if-no-files-found: error
+          retention-days: 14
