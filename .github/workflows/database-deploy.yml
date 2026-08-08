@@ -1,0 +1,183 @@
+name: Database Environment Migration
+
+on:
+  push:
+    branches:
+      - develop
+      - qa
+      - staging
+      - main
+
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Ambiente que se va a migrar
+        required: true
+        type: choice
+        options:
+          - develop
+          - qa
+          - staging
+          - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: database-deploy-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  resolve-environment:
+    name: resolve-environment
+    runs-on: ubuntu-latest
+
+    outputs:
+      target: ${{ steps.target.outputs.environment }}
+
+    steps:
+      - name: Determinar ambiente
+        id: target
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TARGET="${{ inputs.environment }}"
+          else
+            TARGET="${{ github.ref_name }}"
+          fi
+
+          case "$TARGET" in
+            develop|qa|staging|main)
+              ;;
+            *)
+              echo "::error::Ambiente no permitido: $TARGET"
+              exit 1
+              ;;
+          esac
+
+          echo "environment=$TARGET" >> "$GITHUB_OUTPUT"
+
+  migrate:
+    name: migrate-${{ needs.resolve-environment.outputs.target }}
+    needs: resolve-environment
+    runs-on: ubuntu-latest
+
+    environment:
+      name: ${{ needs.resolve-environment.outputs.target }}
+
+    timeout-minutes: 30
+
+    env:
+      LIQUIBASE_IMAGE: liquibase/liquibase:4.31.1
+      CHANGELOG_FILE: changelog/changelog-master.yaml
+      DB_URL: ${{ secrets.DB_URL }}
+      DB_USERNAME: ${{ secrets.DB_USERNAME }}
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+
+    steps:
+      - name: Obtener repositorio
+        uses: actions/checkout@v4
+
+      - name: Validar secretos requeridos
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -n "$DB_URL" || {
+            echo "::error::Falta DB_URL."
+            exit 1
+          }
+
+          test -n "$DB_USERNAME" || {
+            echo "::error::Falta DB_USERNAME."
+            exit 1
+          }
+
+          test -n "$DB_PASSWORD" || {
+            echo "::error::Falta DB_PASSWORD."
+            exit 1
+          }
+
+      - name: Descargar Liquibase
+        run: docker pull "$LIQUIBASE_IMAGE"
+
+      - name: Validar changelog
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          docker run --rm \
+            -v "$PWD:/liquibase/changelog" \
+            "$LIQUIBASE_IMAGE" \
+            --url="$DB_URL" \
+            --username="$DB_USERNAME" \
+            --password="$DB_PASSWORD" \
+            --changelog-file="$CHANGELOG_FILE" \
+            validate
+
+      - name: Mostrar estado antes de migrar
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          docker run --rm \
+            -v "$PWD:/liquibase/changelog" \
+            "$LIQUIBASE_IMAGE" \
+            --url="$DB_URL" \
+            --username="$DB_USERNAME" \
+            --password="$DB_PASSWORD" \
+            --changelog-file="$CHANGELOG_FILE" \
+            status --verbose
+
+      - name: Generar SQL del ambiente
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          docker run --rm \
+            -v "$PWD:/liquibase/changelog" \
+            "$LIQUIBASE_IMAGE" \
+            --url="$DB_URL" \
+            --username="$DB_USERNAME" \
+            --password="$DB_PASSWORD" \
+            --changelog-file="$CHANGELOG_FILE" \
+            update-sql \
+            > database-environment-update.sql
+
+      - name: Aplicar migraciones
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          docker run --rm \
+            -v "$PWD:/liquibase/changelog" \
+            "$LIQUIBASE_IMAGE" \
+            --url="$DB_URL" \
+            --username="$DB_USERNAME" \
+            --password="$DB_PASSWORD" \
+            --changelog-file="$CHANGELOG_FILE" \
+            update
+
+      - name: Mostrar estado final
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          docker run --rm \
+            -v "$PWD:/liquibase/changelog" \
+            "$LIQUIBASE_IMAGE" \
+            --url="$DB_URL" \
+            --username="$DB_USERNAME" \
+            --password="$DB_PASSWORD" \
+            --changelog-file="$CHANGELOG_FILE" \
+            status --verbose
+
+      - name: Guardar SQL como evidencia
+        uses: actions/upload-artifact@v4
+        with:
+          name: migration-sql-${{ needs.resolve-environment.outputs.target }}
+          path: database-environment-update.sql
+          if-no-files-found: error
+          retention-days: 30
