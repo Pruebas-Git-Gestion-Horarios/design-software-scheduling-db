@@ -16,5 +16,5 @@ CREATE TABLE scheduling.schedule (
 
     CONSTRAINT pk_schedule PRIMARY KEY (id),
     CONSTRAINT ck_schedule_status
-        CHECK (status IN ('DRAFT', 'UNDER_REVIEW', 'PUBLISHED', 'ARCHIVED'))
+        CHECK (status IN ('DRAFT', 'UNDER_REVIEW', 'PUBLISHED', 'ARCHIVED', 'PUBLIC'))
 );
